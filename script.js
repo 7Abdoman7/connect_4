@@ -10,7 +10,6 @@ let board = [];
 let moveHistory = []; // Stack: {row, col, player}
 let gameActive = false;
 let currentPlayer = P1;
-let scores = { p1: 0, p2: 0 };
 let config = { mode: 'PvAI', depth: 4, branches: 7, sound: true };
 
 /* --- DOM ELEMENTS --- */
@@ -27,8 +26,6 @@ const els = {
     mMsg: document.getElementById('modal-msg'),
     lblP1: document.getElementById('lbl-p1'),
     lblP2: document.getElementById('lbl-p2'),
-    scP1: document.getElementById('score-p1'),
-    scP2: document.getElementById('score-p2'),
     // Online Menu
     omOverlay: document.getElementById('online-menu'),
     omMain: document.getElementById('om-main'),
@@ -93,31 +90,28 @@ function createGrid() {
 function updateUIForMode() {
     // Labels
     if (config.mode === 'PvAI') {
-        els.lblP1.textContent = "YOU";
-        els.lblP2.textContent = "CPU";
         els.diff.disabled = false;
         els.aiSettings.style.display = 'inline-flex';
-    } else if (config.mode === 'PvP') {
-        els.lblP1.textContent = "PLAYER 1";
-        els.lblP2.textContent = "PLAYER 2";
-        els.diff.disabled = true;
-        els.aiSettings.style.display = 'none';
     } else if (config.mode === 'OnlinePvP') {
-    } else if (config.mode === 'OnlinePvP') {
-        els.lblP1.textContent = "PLAYER 1"; // Will be updated by socket
-        els.lblP2.textContent = "PLAYER 2"; // Will be updated by socket
         els.diff.disabled = true;
         els.aiSettings.style.display = 'none';
     }
-    // Only reset scores when changing modes
-    scores = { p1: 0, p2: 0 };
-    updateScores();
 }
 
-function requestRestart() {
+function quitGame() {
     if (config.mode === 'OnlinePvP') {
-        socket.emit('request_restart', { room: onlineRoom });
+        if (gameActive) {
+            // Forfeit
+            socket.emit('quit_game', { room: onlineRoom });
+            gameActive = false;
+            els.status.textContent = "You Quit. You Lose.";
+            els.status.style.color = 'red';
+        } else {
+            // Just leave
+            closeOnlineMenu();
+        }
     } else {
+        // PvAI - Just reset
         fullReset();
     }
 }
@@ -143,7 +137,7 @@ function handleInteract(col) {
     if (audioCtx && audioCtx.state === 'suspended') audioCtx.resume();
 
     if (!gameActive) return;
-    if (config.mode === 'PvAI' && currentPlayer !== P1) return; // Wait for AI
+    if (config.mode === 'PvAI' && currentPlayer !== P1) return; // Strict check: Only P1 can click in PvAI
     if (config.mode === 'OnlinePvP' && currentPlayer !== myOnlineRole) return; // Wait for Online Opponent
 
     if (isValidMove(col)) {
@@ -204,8 +198,6 @@ function checkGameEnd(lastR, lastC, p) {
         gameActive = false;
         highlightWin(p);
         playSfx('win');
-        scores[p === P1 ? 'p1' : 'p2']++;
-        updateScores();
 
         const isTie = false;
         showModal(p, false);
@@ -492,16 +484,25 @@ function clearGhosts() {
     document.querySelectorAll('.ghost-p1, .ghost-p2').forEach(e => e.classList.remove('ghost-p1', 'ghost-p2'));
 }
 function setStatus() {
-    if (!gameActive) els.status.textContent = "Game Over";
-    else {
-        const name = (currentPlayer === P1) ? (config.mode === 'PvAI' ? 'Your' : 'Player 1') : (config.mode === 'PvAI' ? 'CPU' : 'Player 2');
+    if (!gameActive) return; // Don't overwrite "You Win/Lose" messages
+
+    if (config.mode === 'PvAI') {
+        if (currentPlayer === P1) {
+            els.status.textContent = "Your Turn";
+            els.status.style.color = 'var(--p1-color)';
+        } else {
+            els.status.textContent = "CPU Thinking...";
+            els.status.style.color = 'var(--p2-color)';
+        }
+    } else {
+        // Online
+        const name = (currentPlayer === P1) ? 'Player 1' : 'Player 2';
         els.status.textContent = `${name} Turn`;
         els.status.style.color = currentPlayer === P1 ? 'var(--p1-color)' : 'var(--p2-color)';
     }
 }
 function updateScores() {
-    els.scP1.textContent = scores.p1;
-    els.scP2.textContent = scores.p2;
+    // Removed
 }
 function showModal(winner, draw) {
     if (draw) {
@@ -562,8 +563,10 @@ socket.on('game_start', (data) => {
 
     // If I am P2, I wait. P1 starts.
     // fullReset sets currentPlayer = P1.
+    // If I am P2, I wait. P1 starts.
+    // fullReset sets currentPlayer = P1.
     if (myOnlineRole === P2) {
-        els.status.textContent += ". Waiting for Red...";
+        els.status.textContent += ". Waiting for Opponent...";
     } else {
         els.status.textContent += ". Your Turn!";
     }
@@ -581,12 +584,14 @@ socket.on('opponent_move', (data) => {
     setStatus();
 });
 
-socket.on('restart_game', () => {
-    fullReset();
-    els.status.textContent = "Game Restarted!";
-    if (myOnlineRole === P1) els.status.textContent += " Your Turn!";
-    else els.status.textContent += " Waiting for Red...";
+socket.on('game_won_by_quit', () => {
+    gameActive = false;
+    els.status.textContent = "Opponent Quit! You Win!";
+    els.status.style.color = 'var(--accent)';
+    showModal(myOnlineRole, false); // Show win modal
 });
+
+// Removed restart_game listener as restart is gone
 
 /* --- ONLINE MENU FUNCTIONS --- */
 function showOnlineMenu() {

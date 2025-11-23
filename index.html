@@ -13,21 +13,12 @@
     <canvas id="confetti-canvas"></canvas>
 
     <header>
-        <div class="score-group">
-            <span class="score-label" id="lbl-p1">PLAYER</span>
-            <span class="score-val" id="score-p1">0</span>
-        </div>
-        <div style="font-weight:bold; font-size:1.2rem; opacity:0.5">VS</div>
-        <div class="score-group">
-            <span class="score-label" id="lbl-p2">CPU</span>
-            <span class="score-val" id="score-p2">0</span>
-        </div>
+        <h1>Connect 4 Elite</h1>
     </header>
 
     <div class="controls">
         <select id="game-mode">
             <option value="PvAI">👤 vs 🤖 (Standard)</option>
-            <option value="PvP">👥 vs 👥 (Local)</option>
             <option value="OnlinePvP">🌍 Online PvP</option>
         </select>
 
@@ -46,7 +37,7 @@
         </div>
 
         <button class="btn-icon" onclick="toggleSound()" id="snd-btn" title="Sound">🔊</button>
-        <button class="btn-danger" onclick="requestRestart()">Restart</button>
+        <button class="btn-danger" onclick="quitGame()">Quit</button>
     </div>
 
     <!-- AI Controls Removed -->

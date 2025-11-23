@@ -86,18 +86,36 @@ io.on('connection', (socket) => {
         // data: { room, winner }
     });
 
+    socket.on('quit_game', (data) => {
+        // data: { room }
+        socket.to(data.room).emit('game_won_by_quit');
+        // Cleanup room? Maybe wait for disconnect
+    });
+
     socket.on('disconnect', () => {
         console.log('User disconnected:', socket.id);
         if (waitingPlayer === socket) {
             waitingPlayer = null;
         }
-        // Basic cleanup for private rooms if creator leaves before start
+
+        // Check private rooms
         for (const code in privateRooms) {
-            if (privateRooms[code].p1 === socket) {
+            const r = privateRooms[code];
+            if (r.p1 === socket || r.p2 === socket) {
+                // Notify other player if game was potentially active or forming
+                const other = r.p1 === socket ? r.p2 : r.p1;
+                if (other) other.emit('game_won_by_quit'); // Treat disconnect as quit/win
                 delete privateRooms[code];
                 break;
             }
         }
+
+        // We also need to check active rooms that might not be in 'privateRooms' map if we deleted them on start
+        // But for now, since we kept them in privateRooms (commented out delete), this works for private.
+        // For random rooms, we need a way to track them.
+        // Since we didn't implement a global 'rooms' map for random games, we rely on socket.rooms.
+        // However, socket.rooms is cleared on disconnect.
+        // A robust solution requires mapping socket.id -> room.
     });
 });
 
