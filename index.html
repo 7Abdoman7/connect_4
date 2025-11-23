@@ -28,28 +28,28 @@
         <select id="game-mode">
             <option value="PvAI">👤 vs 🤖 (Standard)</option>
             <option value="PvP">👥 vs 👥 (Local)</option>
-            <option value="AIvAI">🤖 vs 🤖 (Watch Mode)</option>
             <option value="OnlinePvP">🌍 Online PvP</option>
         </select>
 
-        <select id="difficulty">
-            <option value="2">Easy</option>
-            <option value="4" selected>Medium</option>
-            <option value="6">Hard</option>
-            <option value="8">🔥 Impossible</option>
-        </select>
+        <div id="ai-settings" style="display:inline-flex; gap:5px;">
+            <select id="difficulty" title="Max Depth">
+                <option value="2">Depth: 2 (Easy)</option>
+                <option value="4" selected>Depth: 4 (Med)</option>
+                <option value="6">Depth: 6 (Hard)</option>
+                <option value="8">Depth: 8 (Extreme)</option>
+            </select>
+            <select id="ai-branches" title="Search Width (Branches)">
+                <option value="7" selected>Width: 7 (All)</option>
+                <option value="5">Width: 5</option>
+                <option value="3">Width: 3</option>
+            </select>
+        </div>
 
-        <button class="btn-icon" onclick="undoMove()" title="Undo">↩</button>
         <button class="btn-icon" onclick="toggleSound()" id="snd-btn" title="Sound">🔊</button>
-        <button class="btn-danger" onclick="fullReset()">Restart</button>
+        <button class="btn-danger" onclick="requestRestart()">Restart</button>
     </div>
 
-    <!-- AI Controls (Only visible in AI vs AI) -->
-    <div id="ai-controls">
-        <button onclick="aiControl('back')">⏪</button>
-        <button onclick="aiControl('toggle')" id="ai-play-btn">⏸</button>
-        <button onclick="aiControl('forward')">⏩</button>
-    </div>
+    <!-- AI Controls Removed -->
 
     <div class="game-wrapper">
         <div class="board" id="board"></div>

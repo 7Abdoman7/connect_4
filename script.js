@@ -11,11 +11,7 @@ let moveHistory = []; // Stack: {row, col, player}
 let gameActive = false;
 let currentPlayer = P1;
 let scores = { p1: 0, p2: 0 };
-let config = { mode: 'PvAI', depth: 4, sound: true };
-
-// AI vs AI specifics
-let aiPaused = false;
-let aiTimer = null;
+let config = { mode: 'PvAI', depth: 4, branches: 7, sound: true };
 
 /* --- DOM ELEMENTS --- */
 const els = {
@@ -24,8 +20,8 @@ const els = {
     mode: document.getElementById('game-mode'),
     diff: document.getElementById('difficulty'),
     sndBtn: document.getElementById('snd-btn'),
-    aiControls: document.getElementById('ai-controls'),
-    aiPlayBtn: document.getElementById('ai-play-btn'),
+    aiSettings: document.getElementById('ai-settings'),
+    aiBranches: document.getElementById('ai-branches'),
     modal: document.getElementById('modal-overlay'),
     mTitle: document.getElementById('modal-title'),
     mMsg: document.getElementById('modal-msg'),
@@ -59,7 +55,10 @@ function init() {
 
     els.diff.addEventListener('change', e => {
         config.depth = parseInt(e.target.value);
-        fullReset();
+    });
+
+    els.aiBranches.addEventListener('change', e => {
+        config.branches = parseInt(e.target.value);
     });
 
     updateUIForMode();
@@ -97,31 +96,33 @@ function updateUIForMode() {
         els.lblP1.textContent = "YOU";
         els.lblP2.textContent = "CPU";
         els.diff.disabled = false;
-        els.aiControls.style.display = 'none';
+        els.aiSettings.style.display = 'inline-flex';
     } else if (config.mode === 'PvP') {
         els.lblP1.textContent = "PLAYER 1";
         els.lblP2.textContent = "PLAYER 2";
         els.diff.disabled = true;
-        els.aiControls.style.display = 'none';
-    } else if (config.mode === 'AIvAI') {
-        els.lblP1.textContent = "CPU RED";
-        els.lblP2.textContent = "CPU YEL";
-        els.diff.disabled = false;
-        els.aiControls.style.display = 'flex';
-        aiPaused = false;
-        updateAiBtn();
+        els.aiSettings.style.display = 'none';
+    } else if (config.mode === 'OnlinePvP') {
     } else if (config.mode === 'OnlinePvP') {
         els.lblP1.textContent = "PLAYER 1"; // Will be updated by socket
         els.lblP2.textContent = "PLAYER 2"; // Will be updated by socket
         els.diff.disabled = true;
-        els.aiControls.style.display = 'none';
+        els.aiSettings.style.display = 'none';
     }
+    // Only reset scores when changing modes
     scores = { p1: 0, p2: 0 };
     updateScores();
 }
 
+function requestRestart() {
+    if (config.mode === 'OnlinePvP') {
+        socket.emit('request_restart', { room: onlineRoom });
+    } else {
+        fullReset();
+    }
+}
+
 function fullReset() {
-    clearTimeout(aiTimer);
     gameActive = true;
     board = Array(ROWS).fill().map(() => Array(COLS).fill(EMPTY));
     moveHistory = [];
@@ -130,13 +131,10 @@ function fullReset() {
     // Clear UI
     document.querySelectorAll('.piece').forEach(p => p.className = 'piece');
     document.querySelectorAll('.cell').forEach(c => c.classList.remove('win-bg'));
+    document.querySelectorAll('.win').forEach(e => e.classList.remove('win'));
     els.modal.classList.remove('active');
 
     setStatus();
-
-    if (config.mode === 'AIvAI' && !aiPaused) {
-        aiTimer = setTimeout(processAiTurn, 800);
-    }
 }
 
 /* --- GAME LOGIC --- */
@@ -144,7 +142,7 @@ function handleInteract(col) {
     // Resume Audio Context on first click
     if (audioCtx && audioCtx.state === 'suspended') audioCtx.resume();
 
-    if (!gameActive || config.mode === 'AIvAI') return;
+    if (!gameActive) return;
     if (config.mode === 'PvAI' && currentPlayer !== P1) return; // Wait for AI
     if (config.mode === 'OnlinePvP' && currentPlayer !== myOnlineRole) return; // Wait for Online Opponent
 
@@ -187,28 +185,7 @@ function executeMove(col, player) {
     return row;
 }
 
-function undoMove() {
-    if (config.mode === 'AIvAI') return; // Use AI controls instead
-    if (moveHistory.length === 0 || !gameActive) return;
-
-    let steps = 1;
-    // If PvAI and it's currently Player's turn, we undo 2 moves (AI + Player)
-    if (config.mode === 'PvAI' && currentPlayer === P1 && moveHistory.length >= 2) steps = 2;
-
-    for (let i = 0; i < steps; i++) {
-        if (moveHistory.length === 0) break;
-        const last = moveHistory.pop();
-        board[last.r][last.c] = EMPTY;
-        const pDiv = document.getElementById(`p-${last.r}-${last.c}`);
-        pDiv.className = 'piece';
-    }
-
-    gameActive = true;
-    els.modal.classList.remove('active');
-    currentPlayer = (moveHistory.length % 2 === 0) ? P1 : P2;
-    setStatus();
-    clearGhosts();
-}
+// Undo functionality removed
 
 function getNextOpenRow(col) {
     for (let r = ROWS - 1; r >= 0; r--) {
@@ -301,9 +278,8 @@ function processAiTurn() {
     currentPlayer = currentPlayer === P1 ? P2 : P1;
     setStatus();
 
-    if (config.mode === 'AIvAI' && !aiPaused) {
-        aiTimer = setTimeout(processAiTurn, 1000); // Delay between bots
-    }
+    currentPlayer = currentPlayer === P1 ? P2 : P1;
+    setStatus();
 }
 
 function getBestMove(b, player) {
@@ -318,6 +294,11 @@ function getBestMove(b, player) {
     let validMoves = [];
     for (let c = 0; c < COLS; c++) if (b[0][c] === EMPTY) validMoves.push(c);
     validMoves.sort((x, y) => Math.abs(3 - x) - Math.abs(3 - y));
+
+    // Limit branches
+    if (validMoves.length > config.branches) {
+        validMoves = validMoves.slice(0, config.branches);
+    }
 
     // 3. Minimax
     let bestScore = -Infinity;
@@ -404,41 +385,7 @@ function getNextOpenRowTemp(b, col) {
     return -1;
 }
 
-/* --- AI VS AI CONTROLS --- */
-function aiControl(action) {
-    clearTimeout(aiTimer); // Stop loop logic regardless
-
-    if (action === 'toggle') {
-        aiPaused = !aiPaused;
-        updateAiBtn();
-        if (!aiPaused && gameActive) processAiTurn();
-    }
-    else if (action === 'back') {
-        // Undo last move (one step)
-        aiPaused = true; // Pause when manually stepping
-        updateAiBtn();
-        if (moveHistory.length > 0) {
-            const last = moveHistory.pop();
-            board[last.r][last.c] = EMPTY;
-            document.getElementById(`p-${last.r}-${last.c}`).className = 'piece';
-            document.querySelectorAll('.win').forEach(e => e.classList.remove('win'));
-            els.modal.classList.remove('active');
-            gameActive = true;
-            currentPlayer = last.p;
-            setStatus();
-        }
-    }
-    else if (action === 'forward') {
-        // Force one step
-        aiPaused = true;
-        updateAiBtn();
-        if (gameActive) processAiTurn();
-    }
-}
-
-function updateAiBtn() {
-    els.aiPlayBtn.textContent = aiPaused ? '▶' : '⏸';
-}
+/* --- AI VS AI CONTROLS REMOVED --- */
 
 /* --- AUDIO ENGINE --- */
 let audioCtx = null;
@@ -534,7 +481,7 @@ function updateConfetti() {
 
 /* --- HELPERS --- */
 function showGhost(c) {
-    if (!gameActive || config.mode === 'AIvAI') return;
+    if (!gameActive) return;
     clearGhosts();
     const r = getNextOpenRow(c);
     if (r !== -1) {
@@ -569,7 +516,8 @@ function showModal(winner, draw) {
     setTimeout(() => els.modal.classList.add('active'), 600);
 }
 function closeModal() {
-    fullReset();
+    // Do not auto reset
+    els.modal.classList.remove('active');
 }
 
 // Boot
@@ -631,6 +579,13 @@ socket.on('opponent_move', (data) => {
 
     currentPlayer = currentPlayer === P1 ? P2 : P1;
     setStatus();
+});
+
+socket.on('restart_game', () => {
+    fullReset();
+    els.status.textContent = "Game Restarted!";
+    if (myOnlineRole === P1) els.status.textContent += " Your Turn!";
+    else els.status.textContent += " Waiting for Red...";
 });
 
 /* --- ONLINE MENU FUNCTIONS --- */

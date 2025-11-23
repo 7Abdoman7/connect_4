@@ -66,10 +66,15 @@ io.on('connection', (socket) => {
             roomData.p2.emit('game_start', { role: 2, room: room });
 
             console.log(`Private Game started in ${room}`);
-            delete privateRooms[code]; // Cleanup code mapping, room persists in socket.io
+            // Keep room in privateRooms to handle restarts if needed, or move to a activeGames map
+            // For simplicity, we keep it but might need cleanup logic later
         } else {
             socket.emit('error_msg', { msg: "Invalid code or room full" });
         }
+    });
+
+    socket.on('request_restart', (data) => {
+        io.to(data.room).emit('restart_game');
     });
 
     socket.on('make_move', (data) => {
