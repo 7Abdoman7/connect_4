@@ -20,6 +20,8 @@ const els = {
     diff: document.getElementById('difficulty'),
     sndBtn: document.getElementById('snd-btn'),
     aiSettings: document.getElementById('ai-settings'),
+    turnOrder: document.getElementById('turn-order'),
+    onlineTurnPref: document.getElementById('online-turn-pref'),
     modal: document.getElementById('modal-overlay'),
     mTitle: document.getElementById('modal-title'),
     mMsg: document.getElementById('modal-msg'),
@@ -115,7 +117,15 @@ function fullReset() {
     gameActive = true;
     board = Array(ROWS).fill().map(() => Array(COLS).fill(EMPTY));
     moveHistory = [];
-    currentPlayer = P1;
+
+    // Determine starting player based on mode and settings
+    if (config.mode === 'PvAI') {
+        const pref = parseInt(els.turnOrder.value);
+        currentPlayer = (pref === 2) ? P2 : P1;
+    } else {
+        // Online or PvP (removed) - Default P1, but online overrides this on game_start
+        currentPlayer = P1;
+    }
 
     // Clear UI
     document.querySelectorAll('.piece').forEach(p => p.className = 'piece');
@@ -124,6 +134,11 @@ function fullReset() {
     els.modal.classList.remove('active');
 
     setStatus();
+
+    // Trigger AI if it starts
+    if (config.mode === 'PvAI' && currentPlayer === P2) {
+        setTimeout(processAiTurn, 500);
+    }
 }
 
 /* --- GAME LOGIC --- */
@@ -515,8 +530,12 @@ function showModal(winner, draw) {
     setTimeout(() => els.modal.classList.add('active'), 600);
 }
 function closeModal() {
-    // Do not auto reset
+    // Return to Main Menu
     els.modal.classList.remove('active');
+    config.mode = 'PvAI';
+    els.mode.value = 'PvAI';
+    updateUIForMode();
+    fullReset();
 }
 
 // Boot
@@ -614,7 +633,8 @@ function joinRandom() {
 }
 
 function createPrivate() {
-    socket.emit('create_private');
+    const pref = parseInt(els.onlineTurnPref.value); // 1 or 2
+    socket.emit('create_private', { role_pref: pref });
 }
 
 function joinPrivate() {

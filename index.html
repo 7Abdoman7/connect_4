@@ -26,8 +26,12 @@
             <select id="difficulty" title="Difficulty">
                 <option value="4">Easy</option>
                 <option value="6" selected>Medium</option>
-                <option value="10">Hard</option>
-                <option value="14">Extreme</option>
+                <option value="8">Hard</option>
+                <option value="10">Extreme</option>
+            </select>
+            <select id="turn-order" title="Turn Order">
+                <option value="1">Go First</option>
+                <option value="2">Go Second</option>
             </select>
         </div>
 
@@ -47,7 +51,7 @@
         <div class="modal">
             <h2 id="modal-title">You Win!</h2>
             <p id="modal-msg">Great game!</p>
-            <button class="btn-primary" onclick="closeModal()">Play Again</button>
+            <button class="btn-primary" onclick="closeModal()">Main Menu</button>
         </div>
     </div>
 
@@ -56,6 +60,13 @@
             <h2>Online Multiplayer</h2>
             <button class="btn-primary" onclick="joinRandom()">🎲 Random Match</button>
             <div class="or-divider">OR</div>
+            <div style="margin-bottom:10px">
+                <label style="font-size:0.9rem; font-weight:bold;">I want to:</label>
+                <select id="online-turn-pref" style="width:100%; margin-top:5px;">
+                    <option value="1">Go First</option>
+                    <option value="2">Go Second</option>
+                </select>
+            </div>
             <button onclick="createPrivate()">🔑 Create Private Room</button>
             <div class="or-divider">OR</div>
             <input type="text" id="room-code-input" placeholder="Enter 4-Digit Code" maxlength="4">

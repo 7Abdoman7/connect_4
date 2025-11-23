@@ -28,9 +28,14 @@ io.on('connection', (socket) => {
             p1.join(room);
             p2.join(room);
 
+            // Randomize roles
+            const rand = Math.random();
+            const p1Role = rand < 0.5 ? 1 : 2;
+            const p2Role = p1Role === 1 ? 2 : 1;
+
             // Notify players
-            p1.emit('game_start', { role: 1, room: room }); // Player 1 (Red)
-            p2.emit('game_start', { role: 2, room: room }); // Player 2 (Yellow)
+            p1.emit('game_start', { role: p1Role, room: room });
+            p2.emit('game_start', { role: p2Role, room: room });
 
             console.log(`Random Game started in ${room}`);
             waitingPlayer = null;
@@ -43,31 +48,49 @@ io.on('connection', (socket) => {
     });
 
     // --- PRIVATE ROOMS ---
-    socket.on('create_private', () => {
+    socket.on('create_private', (data) => {
         const code = Math.floor(1000 + Math.random() * 9000).toString();
-        privateRooms[code] = { p1: socket, p2: null, room: `private_${code}` };
+        // data.role_pref: 1 (First) or 2 (Second)
+        // If creator wants 1, they are p1. If 2, they are p2 (so we store them as p2 in the object? No, easier to store as creator and assign role later)
+        // Actually, let's store explicit roles.
+        // privateRooms[code] = { p1: socket, p2: null ... } implies p1 is the one who created? Not necessarily.
+        // Let's stick to: p1 field is "Player A", p2 field is "Player B".
+        // We will assign roles when game starts.
+
+        const pref = data && data.role_pref ? data.role_pref : 1;
+
+        privateRooms[code] = {
+            creator: socket,
+            joiner: null,
+            room: `private_${code}`,
+            creatorRole: pref
+        };
+
         socket.join(privateRooms[code].room);
         socket.emit('private_created', { code: code });
-        console.log(`Private room created: ${code}`);
+        console.log(`Private room created: ${code} with pref ${pref}`);
     });
 
     socket.on('join_private', (data) => {
         const code = data.code;
         const roomData = privateRooms[code];
 
-        if (roomData && !roomData.p2) {
-            roomData.p2 = socket;
+        if (roomData && !roomData.joiner) {
+            roomData.joiner = socket;
             const room = roomData.room;
 
             socket.join(room);
 
+            // Assign roles based on creator preference
+            const creatorRole = roomData.creatorRole;
+            const joinerRole = creatorRole === 1 ? 2 : 1;
+
             // Notify players
-            roomData.p1.emit('game_start', { role: 1, room: room });
-            roomData.p2.emit('game_start', { role: 2, room: room });
+            roomData.creator.emit('game_start', { role: creatorRole, room: room });
+            roomData.joiner.emit('game_start', { role: joinerRole, room: room });
 
             console.log(`Private Game started in ${room}`);
-            // Keep room in privateRooms to handle restarts if needed, or move to a activeGames map
-            // For simplicity, we keep it but might need cleanup logic later
+            // Keep room in privateRooms to handle restarts if needed
         } else {
             socket.emit('error_msg', { msg: "Invalid code or room full" });
         }
@@ -101,9 +124,9 @@ io.on('connection', (socket) => {
         // Check private rooms
         for (const code in privateRooms) {
             const r = privateRooms[code];
-            if (r.p1 === socket || r.p2 === socket) {
+            if (r.creator === socket || r.joiner === socket) {
                 // Notify other player if game was potentially active or forming
-                const other = r.p1 === socket ? r.p2 : r.p1;
+                const other = r.creator === socket ? r.joiner : r.creator;
                 if (other) other.emit('game_won_by_quit'); // Treat disconnect as quit/win
                 delete privateRooms[code];
                 break;
