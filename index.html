@@ -1,0 +1,93 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Connect 4 Elite</title>
+    <link rel="stylesheet" href="style.css">
+</head>
+
+<body>
+
+    <canvas id="confetti-canvas"></canvas>
+
+    <header>
+        <div class="score-group">
+            <span class="score-label" id="lbl-p1">PLAYER</span>
+            <span class="score-val" id="score-p1">0</span>
+        </div>
+        <div style="font-weight:bold; font-size:1.2rem; opacity:0.5">VS</div>
+        <div class="score-group">
+            <span class="score-label" id="lbl-p2">CPU</span>
+            <span class="score-val" id="score-p2">0</span>
+        </div>
+    </header>
+
+    <div class="controls">
+        <select id="game-mode">
+            <option value="PvAI">👤 vs 🤖 (Standard)</option>
+            <option value="PvP">👥 vs 👥 (Local)</option>
+            <option value="AIvAI">🤖 vs 🤖 (Watch Mode)</option>
+            <option value="OnlinePvP">🌍 Online PvP</option>
+        </select>
+
+        <select id="difficulty">
+            <option value="2">Easy</option>
+            <option value="4" selected>Medium</option>
+            <option value="6">Hard</option>
+            <option value="8">🔥 Impossible</option>
+        </select>
+
+        <button class="btn-icon" onclick="undoMove()" title="Undo">↩</button>
+        <button class="btn-icon" onclick="toggleSound()" id="snd-btn" title="Sound">🔊</button>
+        <button class="btn-danger" onclick="fullReset()">Restart</button>
+    </div>
+
+    <!-- AI Controls (Only visible in AI vs AI) -->
+    <div id="ai-controls">
+        <button onclick="aiControl('back')">⏪</button>
+        <button onclick="aiControl('toggle')" id="ai-play-btn">⏸</button>
+        <button onclick="aiControl('forward')">⏩</button>
+    </div>
+
+    <div class="game-wrapper">
+        <div class="board" id="board"></div>
+    </div>
+
+    <div id="status-bar">Welcome to Connect 4 Elite</div>
+
+    <div id="modal-overlay">
+        <div class="modal">
+            <h2 id="modal-title">You Win!</h2>
+            <p id="modal-msg">Great game!</p>
+            <button class="btn-primary" onclick="closeModal()">Play Again</button>
+        </div>
+    </div>
+
+    <div id="online-menu">
+        <div class="menu-card" id="om-main">
+            <h2>Online Multiplayer</h2>
+            <button class="btn-primary" onclick="joinRandom()">🎲 Random Match</button>
+            <div class="or-divider">OR</div>
+            <button onclick="createPrivate()">🔑 Create Private Room</button>
+            <div class="or-divider">OR</div>
+            <input type="text" id="room-code-input" placeholder="Enter 4-Digit Code" maxlength="4">
+            <button class="btn-danger" onclick="joinPrivate()">Join Room</button>
+            <div style="margin-top:15px"><button onclick="closeOnlineMenu()">Cancel</button></div>
+        </div>
+
+        <div class="menu-card" id="om-waiting" style="display:none">
+            <h2>Waiting...</h2>
+            <p>Share this code with your friend:</p>
+            <div id="room-code-display">----</div>
+            <p>Waiting for opponent to join...</p>
+            <button class="btn-danger" onclick="closeOnlineMenu()">Cancel</button>
+        </div>
+    </div>
+
+    <script src="/socket.io/socket.io.js"></script>
+    <script src="script.js"></script>
+</body>
+
+</html>
