@@ -10,7 +10,7 @@ let board = [];
 let moveHistory = []; // Stack: {row, col, player}
 let gameActive = false;
 let currentPlayer = P1;
-let config = { mode: 'PvAI', depth: 4, branches: 7, sound: true };
+let config = { mode: 'PvAI', depth: 6, sound: true };
 
 /* --- DOM ELEMENTS --- */
 const els = {
@@ -20,7 +20,6 @@ const els = {
     diff: document.getElementById('difficulty'),
     sndBtn: document.getElementById('snd-btn'),
     aiSettings: document.getElementById('ai-settings'),
-    aiBranches: document.getElementById('ai-branches'),
     modal: document.getElementById('modal-overlay'),
     mTitle: document.getElementById('modal-title'),
     mMsg: document.getElementById('modal-msg'),
@@ -52,10 +51,6 @@ function init() {
 
     els.diff.addEventListener('change', e => {
         config.depth = parseInt(e.target.value);
-    });
-
-    els.aiBranches.addEventListener('change', e => {
-        config.branches = parseInt(e.target.value);
     });
 
     updateUIForMode();
@@ -262,16 +257,24 @@ function processAiTurn() {
     if (!gameActive) return;
 
     // Delay execution to separate from UI thread slightly
-    const move = getBestMove(board, currentPlayer);
-    const row = executeMove(move, currentPlayer);
+    try {
+        const move = getBestMove(board, currentPlayer);
+        const row = executeMove(move, currentPlayer);
 
-    if (checkGameEnd(row, move, currentPlayer)) return;
+        if (checkGameEnd(row, move, currentPlayer)) return;
 
-    currentPlayer = currentPlayer === P1 ? P2 : P1;
-    setStatus();
-
-    currentPlayer = currentPlayer === P1 ? P2 : P1;
-    setStatus();
+        currentPlayer = currentPlayer === P1 ? P2 : P1;
+        setStatus();
+    } catch (e) {
+        console.error("AI Error:", e);
+        // Fallback: Random move or just pass turn to avoid hang
+        // For now, let's try to recover by passing turn back if possible
+        // But if executeMove failed, we might be in weird state.
+        // Simplest recovery:
+        currentPlayer = P1;
+        setStatus();
+        els.status.textContent = "CPU Error. Your Turn.";
+    }
 }
 
 function getBestMove(b, player) {
@@ -286,11 +289,6 @@ function getBestMove(b, player) {
     let validMoves = [];
     for (let c = 0; c < COLS; c++) if (b[0][c] === EMPTY) validMoves.push(c);
     validMoves.sort((x, y) => Math.abs(3 - x) - Math.abs(3 - y));
-
-    // Limit branches
-    if (validMoves.length > config.branches) {
-        validMoves = validMoves.slice(0, config.branches);
-    }
 
     // 3. Minimax
     let bestScore = -Infinity;
