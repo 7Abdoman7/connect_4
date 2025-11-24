@@ -13,100 +13,144 @@ let currentPlayer = P1;
 let config = { mode: 'PvAI', depth: 6, sound: true };
 
 /* --- DOM ELEMENTS --- */
-const els = {
-    board: document.getElementById('board'),
-    status: document.getElementById('status-bar'),
-    sndBtn: document.getElementById('snd-btn'),
-    modal: document.getElementById('modal-overlay'),
-    mTitle: document.getElementById('modal-title'),
-    mMsg: document.getElementById('modal-msg'),
-
-    // Menus
-    mainMenu: document.getElementById('main-menu'),
-    aiSetup: document.getElementById('ai-setup-menu'),
-    onlineMode: document.getElementById('online-mode-menu'),
-    onlineFriend: document.getElementById('online-friend-menu'),
-    onlineWaiting: document.getElementById('online-waiting-menu'),
-
-    // Inputs
-    setupDiff: document.getElementById('setup-difficulty'),
-    setupTurn: document.getElementById('setup-turn-order'),
-    onlineTurnPref: document.getElementById('online-turn-pref'),
-    omCodeInput: document.getElementById('room-code-input'),
-    omCodeDisplay: document.getElementById('room-code-display'),
-
-    // Game Wrapper
-    gameWrapper: document.querySelector('.game-wrapper'),
-    controls: document.querySelector('.controls'),
-    statusBar: document.getElementById('status-bar')
-};
+let els = {};
 
 /* --- INITIALIZATION --- */
 function init() {
+    // Populate DOM elements
+    els = {
+        board: document.getElementById('board'),
+        status: document.getElementById('status-bar'),
+        sndBtn: document.getElementById('snd-btn'),
+        modal: document.getElementById('modal-overlay'),
+        mTitle: document.getElementById('modal-title'),
+        mMsg: document.getElementById('modal-msg'),
+
+        // Menus
+        mainMenu: document.getElementById('main-menu'),
+        aiSetup: document.getElementById('ai-setup-menu'),
+        onlineMode: document.getElementById('online-mode-menu'),
+        onlineFriend: document.getElementById('online-friend-menu'),
+        onlineWaiting: document.getElementById('online-waiting-menu'),
+
+        // Inputs
+        setupDiff: document.getElementById('setup-difficulty'),
+        setupTurn: document.getElementById('setup-turn-order'),
+        onlineTurnPref: document.getElementById('online-turn-pref'),
+        omCodeInput: document.getElementById('room-code-input'),
+        omCodeDisplay: document.getElementById('room-code-display'),
+
+        // Game Wrapper
+        gameWrapper: document.querySelector('.game-wrapper'),
+        controls: document.querySelector('.controls'),
+        statusBar: document.getElementById('status-bar')
+    };
+
+    console.log("Initialized Elements:", els);
+
     createGrid();
     initAudio();
     showMainMenu();
 }
 
+// Boot
+document.addEventListener('DOMContentLoaded', () => {
+    init();
+});
+
 /* --- NAVIGATION --- */
 function hideAllMenus() {
     const menus = [els.mainMenu, els.aiSetup, els.onlineMode, els.onlineFriend, els.onlineWaiting];
-    menus.forEach(m => m.style.display = 'none');
-    els.gameWrapper.style.display = 'none';
-    els.controls.style.display = 'none';
-    els.statusBar.style.display = 'none';
-    els.modal.classList.remove('active');
+    menus.forEach(m => {
+        if (m) m.style.display = 'none';
+    });
+    if (els.gameWrapper) els.gameWrapper.style.display = 'none';
+    if (els.controls) els.controls.style.display = 'none';
+    if (els.statusBar) els.statusBar.style.display = 'none';
+    if (els.modal) els.modal.classList.remove('active');
 }
 
 function showMainMenu() {
     gameActive = false;
     hideAllMenus();
-    els.mainMenu.style.display = 'flex';
+    if (els.mainMenu) els.mainMenu.style.display = 'flex';
 
     // Disconnect socket if connected to a game? 
     // Ideally we leave the room.
-    if (socket.connected) {
+    if (socket && socket.connected) {
         socket.emit('quit_game', { room: onlineRoom });
     }
 }
 
 function startPvAI() {
     hideAllMenus();
-    els.aiSetup.style.display = 'flex';
+    if (els.aiSetup) {
+        els.aiSetup.style.display = 'flex';
+    } else {
+        console.error("Error: AI Setup menu not found!");
+        alert("Error: AI Setup menu missing. Please check console.");
+    }
 }
 
 function confirmAiSetup() {
-    config.mode = 'PvAI';
-    config.depth = parseInt(els.setupDiff.value);
-    const turn = parseInt(els.setupTurn.value);
+    try {
+        console.log("Starting AI Setup...");
+        config.mode = 'PvAI';
+        if (els.setupDiff) config.depth = parseInt(els.setupDiff.value);
+        const turn = els.setupTurn ? parseInt(els.setupTurn.value) : 1;
 
-    hideAllMenus();
-    els.gameWrapper.style.display = 'block';
-    els.controls.style.display = 'flex';
-    els.statusBar.style.display = 'block';
+        hideAllMenus();
+        if (els.gameWrapper) {
+            console.log("Showing Game Wrapper");
+            els.gameWrapper.style.setProperty('display', 'block', 'important');
+        } else {
+            console.error("Game Wrapper not found!");
+            // Fallback
+            const gw = document.querySelector('.game-wrapper');
+            if (gw) gw.style.setProperty('display', 'block', 'important');
+        }
+        if (els.controls) els.controls.style.display = 'flex';
+        if (els.statusBar) els.statusBar.style.display = 'block';
 
-    fullReset(turn);
+        createGrid();
+        fullReset(turn);
+    } catch (e) {
+        console.error("Setup Error:", e);
+        alert("Error starting game: " + e.message);
+    }
 }
 
 function startOnline() {
+    if (!socket || !socket.connected) {
+        alert("Online mode is unavailable. Please ensure the server is running.");
+        return;
+    }
     config.mode = 'OnlinePvP';
     showOnlineModeSelect();
 }
 
 function showOnlineModeSelect() {
     hideAllMenus();
-    els.onlineMode.style.display = 'flex';
+    if (els.onlineMode) els.onlineMode.style.display = 'flex';
 }
 
 function showFriendMenu() {
     hideAllMenus();
-    els.onlineFriend.style.display = 'flex';
+    if (els.onlineFriend) els.onlineFriend.style.display = 'flex';
 }
 
 function createGrid() {
-    els.board.innerHTML = '';
+    const boardEl = els.board || document.getElementById('board');
+    console.log("Creating Grid...", boardEl);
+
+    if (!boardEl) { console.error("Board element not found"); return; }
+
+    boardEl.innerHTML = '';
     for (let r = 0; r < ROWS; r++) {
         for (let c = 0; c < COLS; c++) {
+            if (r === 0 && c === 0) {
+                console.log("Cell created at", r, c);
+            }
             let cell = document.createElement('div');
             cell.className = 'cell';
             cell.dataset.c = c;
@@ -122,7 +166,7 @@ function createGrid() {
             cell.onmouseenter = () => showGhost(c);
             cell.onmouseleave = clearGhosts;
 
-            els.board.appendChild(cell);
+            boardEl.appendChild(cell);
         }
     }
 }
@@ -145,7 +189,7 @@ function fullReset(turnOverride) {
     document.querySelectorAll('.piece').forEach(p => p.className = 'piece');
     document.querySelectorAll('.cell').forEach(c => c.classList.remove('win-bg'));
     document.querySelectorAll('.win').forEach(e => e.classList.remove('win'));
-    els.modal.classList.remove('active');
+    if (els.modal) els.modal.classList.remove('active');
 
     setStatus();
 
@@ -493,6 +537,7 @@ function clearGhosts() {
 }
 function setStatus() {
     if (!gameActive) return;
+    if (!els.status) return;
 
     if (config.mode === 'PvAI') {
         if (currentPlayer === P1) {
@@ -540,16 +585,30 @@ function closeModal() {
 }
 
 // Boot
-init();
-
 /* --- ONLINE MULTIPLAYER --- */
-const socket = io();
+/* --- ONLINE MULTIPLAYER --- */
+let socket;
 let myOnlineRole = null; // P1 or P2
 let onlineRoom = null;
 
-socket.on('connect', () => {
-    console.log('Connected to server:', socket.id);
-});
+try {
+    if (typeof io !== 'undefined') {
+        socket = io();
+        socket.on('connect', () => {
+            console.log('Connected to server:', socket.id);
+        });
+    } else {
+        throw new Error('Socket.io not found');
+    }
+} catch (e) {
+    console.warn("Online features disabled:", e.message);
+    // Mock socket to prevent crashes in offline mode
+    socket = {
+        on: () => { },
+        emit: () => { },
+        connected: false
+    };
+}
 
 socket.on('waiting_for_opponent', () => {
     els.status.textContent = "Searching for opponent...";
@@ -558,8 +617,8 @@ socket.on('waiting_for_opponent', () => {
 
 socket.on('private_created', (data) => {
     hideAllMenus();
-    els.onlineWaiting.style.display = 'flex';
-    els.omCodeDisplay.textContent = data.code;
+    if (els.onlineWaiting) els.onlineWaiting.style.display = 'flex';
+    if (els.omCodeDisplay) els.omCodeDisplay.textContent = data.code;
 });
 
 socket.on('error_msg', (data) => {
@@ -575,6 +634,7 @@ socket.on('game_start', (data) => {
     els.controls.style.display = 'flex';
     els.statusBar.style.display = 'block';
 
+    createGrid();
     fullReset();
     gameActive = true;
 
@@ -615,9 +675,9 @@ socket.on('game_won_by_quit', () => {
 /* --- ONLINE MENU FUNCTIONS --- */
 function joinRandom() {
     hideAllMenus();
-    els.gameWrapper.style.display = 'block';
-    els.controls.style.display = 'flex';
-    els.statusBar.style.display = 'block';
+    if (els.gameWrapper) els.gameWrapper.style.display = 'block';
+    if (els.controls) els.controls.style.display = 'flex';
+    if (els.statusBar) els.statusBar.style.display = 'block';
     socket.emit('find_match');
     els.status.textContent = "Searching for random opponent...";
 }
@@ -632,3 +692,6 @@ function joinPrivate() {
     if (code.length !== 4) { alert("Please enter a 4-digit code"); return; }
     socket.emit('join_private', { code: code });
 }
+
+// Start the game
+// init() is called via DOMContentLoaded above
