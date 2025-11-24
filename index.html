@@ -100,7 +100,16 @@
 
     <div class="controls" style="display: none;">
         <button class="btn-icon" onclick="toggleSound()" id="snd-btn" title="Sound">🔊</button>
-        <button class="btn-danger" onclick="showMainMenu()">Main Menu</button>
+        <button class="btn-danger" onclick="quitGame()">Main Menu</button>
+    </div>
+
+    <!-- Modal Overlay -->
+    <div id="modal-overlay" class="modal-overlay">
+        <div class="modal-content">
+            <h2 id="modal-title">Game Over</h2>
+            <p id="modal-msg">Message goes here</p>
+            <button class="btn-primary" onclick="closeModal()">Continue</button>
+        </div>
     </div>
 
     <script src="/socket.io/socket.io.js"></script>

@@ -581,7 +581,30 @@ function showModal(winner, draw) {
 }
 
 function closeModal() {
+    els.modal.classList.remove('active');
     showMainMenu();
+    fullReset(); // Reset board state when returning to menu
+}
+
+function quitGame() {
+    if (gameActive) {
+        gameActive = false;
+        // If online, maybe emit a quit event?
+        if (config.mode === 'OnlinePvP' && socket && socket.connected) {
+            // The server likely handles disconnect, but we can be explicit if needed.
+            // For now, just treating it as a local loss/quit.
+            // If we want to notify opponent of quit explicitly:
+            // socket.emit('quit_game', { room: onlineRoom }); 
+            // (Already handled in showMainMenu -> quit_game emit)
+        }
+
+        els.mTitle.textContent = "You Quit";
+        els.mTitle.style.color = '#666';
+        els.mMsg.textContent = "Game ended.";
+        els.modal.classList.add('active');
+    } else {
+        showMainMenu();
+    }
 }
 
 // Boot
