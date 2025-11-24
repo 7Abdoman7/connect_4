@@ -16,7 +16,6 @@ let config = { mode: 'PvAI', depth: 6, sound: true };
 const els = {
     board: document.getElementById('board'),
     status: document.getElementById('status-bar'),
-    mode: document.getElementById('game-mode'),
     diff: document.getElementById('difficulty'),
     sndBtn: document.getElementById('snd-btn'),
     aiSettings: document.getElementById('ai-settings'),
@@ -25,39 +24,58 @@ const els = {
     modal: document.getElementById('modal-overlay'),
     mTitle: document.getElementById('modal-title'),
     mMsg: document.getElementById('modal-msg'),
-    lblP1: document.getElementById('lbl-p1'),
-    lblP2: document.getElementById('lbl-p2'),
     // Online Menu
     omOverlay: document.getElementById('online-menu'),
     omMain: document.getElementById('om-main'),
     omWaiting: document.getElementById('om-waiting'),
     omCodeInput: document.getElementById('room-code-input'),
-    omCodeDisplay: document.getElementById('room-code-display')
+    omCodeDisplay: document.getElementById('room-code-display'),
+    // Main Menu & Game Wrapper
+    mainMenu: document.getElementById('main-menu'),
+    gameWrapper: document.querySelector('.game-wrapper'),
+    controls: document.querySelector('.controls'),
+    statusBar: document.getElementById('status-bar')
 };
 
 /* --- INITIALIZATION --- */
 function init() {
     createGrid();
-
-    els.mode.addEventListener('change', e => {
-        config.mode = e.target.value;
-        if (config.mode === 'OnlinePvP') {
-            // Show Online Menu instead of auto-joining
-            showOnlineMenu();
-            gameActive = false;
-        } else {
-            updateUIForMode();
-            fullReset();
-        }
-    });
-
-    els.diff.addEventListener('change', e => {
-        config.depth = parseInt(e.target.value);
-    });
-
-    updateUIForMode();
-    fullReset();
     initAudio();
+    showMainMenu();
+}
+
+function showMainMenu() {
+    gameActive = false;
+    els.mainMenu.style.display = 'flex';
+    els.gameWrapper.style.display = 'none';
+    els.controls.style.display = 'none';
+    els.statusBar.style.display = 'none';
+    els.omOverlay.classList.remove('active');
+    els.modal.classList.remove('active');
+
+    // Disconnect socket if connected to a game? 
+    // Ideally we leave the room.
+    if (socket.connected) {
+        socket.emit('quit_game', { room: onlineRoom });
+    }
+}
+
+function startPvAI() {
+    config.mode = 'PvAI';
+    els.mainMenu.style.display = 'none';
+    els.gameWrapper.style.display = 'block';
+    els.controls.style.display = 'flex';
+    els.statusBar.style.display = 'block';
+
+    els.diff.disabled = false;
+    els.aiSettings.style.display = 'inline-flex';
+
+    fullReset();
+}
+
+function startOnline() {
+    config.mode = 'OnlinePvP';
+    showOnlineMenu();
 }
 
 function createGrid() {
@@ -84,35 +102,6 @@ function createGrid() {
     }
 }
 
-function updateUIForMode() {
-    // Labels
-    if (config.mode === 'PvAI') {
-        els.diff.disabled = false;
-        els.aiSettings.style.display = 'inline-flex';
-    } else if (config.mode === 'OnlinePvP') {
-        els.diff.disabled = true;
-        els.aiSettings.style.display = 'none';
-    }
-}
-
-function quitGame() {
-    if (config.mode === 'OnlinePvP') {
-        if (gameActive) {
-            // Forfeit
-            socket.emit('quit_game', { room: onlineRoom });
-            gameActive = false;
-            els.status.textContent = "You Quit. You Lose.";
-            els.status.style.color = 'red';
-        } else {
-            // Just leave
-            closeOnlineMenu();
-        }
-    } else {
-        // PvAI - Just reset
-        fullReset();
-    }
-}
-
 function fullReset() {
     gameActive = true;
     board = Array(ROWS).fill().map(() => Array(COLS).fill(EMPTY));
@@ -123,7 +112,7 @@ function fullReset() {
         const pref = parseInt(els.turnOrder.value);
         currentPlayer = (pref === 2) ? P2 : P1;
     } else {
-        // Online or PvP (removed) - Default P1, but online overrides this on game_start
+        // Online - Default P1, but online overrides this on game_start
         currentPlayer = P1;
     }
 
@@ -189,8 +178,6 @@ function executeMove(col, player) {
     return row;
 }
 
-// Undo functionality removed
-
 function getNextOpenRow(col) {
     for (let r = ROWS - 1; r >= 0; r--) {
         if (board[r][col] === EMPTY) return r;
@@ -209,9 +196,14 @@ function checkGameEnd(lastR, lastC, p) {
         highlightWin(p);
         playSfx('win');
 
-        const isTie = false;
+        // Determine who won for the modal
+        // In OnlinePvP, 'p' is the player who just moved.
+        // If I am P1 and P2 just moved and won, p is P2.
         showModal(p, false);
-        fireConfetti();
+
+        if (config.mode === 'PvAI' && p === P1) fireConfetti();
+        if (config.mode === 'OnlinePvP' && p === myOnlineRole) fireConfetti();
+
         return true;
     }
     if (board[0].every(c => c !== EMPTY)) {
@@ -223,7 +215,6 @@ function checkGameEnd(lastR, lastC, p) {
 }
 
 function checkWin(b, p) {
-    // Optimized check
     // Horiz
     for (let r = 0; r < ROWS; r++)
         for (let c = 0; c < COLS - 3; c++)
@@ -244,9 +235,6 @@ function checkWin(b, p) {
 }
 
 function highlightWin(p) {
-    // Brute force highlight (simplest for this structure)
-    const wins = [];
-    // Logic to find coordinates again to add class
     const directions = [[0, 1], [1, 0], [1, 1], [-1, 1]];
     for (let r = 0; r < ROWS; r++) {
         for (let c = 0; c < COLS; c++) {
@@ -271,7 +259,6 @@ function highlightWin(p) {
 function processAiTurn() {
     if (!gameActive) return;
 
-    // Delay execution to separate from UI thread slightly
     try {
         const move = getBestMove(board, currentPlayer);
         const row = executeMove(move, currentPlayer);
@@ -282,10 +269,6 @@ function processAiTurn() {
         setStatus();
     } catch (e) {
         console.error("AI Error:", e);
-        // Fallback: Random move or just pass turn to avoid hang
-        // For now, let's try to recover by passing turn back if possible
-        // But if executeMove failed, we might be in weird state.
-        // Simplest recovery:
         currentPlayer = P1;
         setStatus();
         els.status.textContent = "CPU Error. Your Turn.";
@@ -293,19 +276,16 @@ function processAiTurn() {
 }
 
 function getBestMove(b, player) {
-    // 1. Random Opening (Variation)
     const movesMade = moveHistory.length;
-    if (movesMade < 2) return Math.floor(Math.random() * 3) + 2; // 2,3,4
+    if (movesMade < 2) return Math.floor(Math.random() * 3) + 2;
 
     const opponent = player === P1 ? P2 : P1;
     const maxDepth = config.depth;
 
-    // 2. Order Moves (Center Priority)
     let validMoves = [];
     for (let c = 0; c < COLS; c++) if (b[0][c] === EMPTY) validMoves.push(c);
     validMoves.sort((x, y) => Math.abs(3 - x) - Math.abs(3 - y));
 
-    // 3. Minimax
     let bestScore = -Infinity;
     let bestMove = validMoves[0];
     let alpha = -Infinity;
@@ -327,14 +307,13 @@ function getBestMove(b, player) {
 }
 
 function minimax(b, depth, alpha, beta, isMax, me, opp) {
-    // Check Terminals
     if (checkWin(b, me)) return 10000 + depth;
     if (checkWin(b, opp)) return -10000 - depth;
     if (depth === 0) return evaluate(b, me, opp);
 
     let validMoves = [];
     for (let c = 0; c < COLS; c++) if (b[0][c] === EMPTY) validMoves.push(c);
-    if (validMoves.length === 0) return 0; // Draw
+    if (validMoves.length === 0) return 0;
 
     let minEval = Infinity;
     for (let col of validMoves) {
@@ -352,10 +331,8 @@ function minimax(b, depth, alpha, beta, isMax, me, opp) {
 
 function evaluate(b, me, opp) {
     let score = 0;
-    // Center Control
     for (let r = 0; r < ROWS; r++) if (b[r][3] === me) score += 5;
 
-    // Evaluation Window
     const scoreWindow = (cells) => {
         let sc = 0;
         let myC = cells.filter(c => c === me).length;
@@ -365,19 +342,16 @@ function evaluate(b, me, opp) {
         if (myC === 3 && emC === 1) sc += 50;
         else if (myC === 2 && emC === 2) sc += 10;
 
-        if (opC === 3 && emC === 1) sc -= 60; // Block hard
+        if (opC === 3 && emC === 1) sc -= 60;
         return sc;
     };
 
-    // Horizontal
     for (let r = 0; r < ROWS; r++) for (let c = 0; c < COLS - 3; c++)
         score += scoreWindow([b[r][c], b[r][c + 1], b[r][c + 2], b[r][c + 3]]);
 
-    // Vertical
     for (let r = 0; r < ROWS - 3; r++) for (let c = 0; c < COLS; c++)
         score += scoreWindow([b[r][c], b[r + 1][c], b[r + 2][c], b[r + 3][c]]);
 
-    // Diagonals
     for (let r = 0; r < ROWS - 3; r++) for (let c = 0; c < COLS - 3; c++) {
         score += scoreWindow([b[r][c], b[r + 1][c + 1], b[r + 2][c + 2], b[r + 3][c + 3]]);
         score += scoreWindow([b[r + 3][c], b[r + 2][c + 1], b[r + 1][c + 2], b[r][c + 3]]);
@@ -389,8 +363,6 @@ function getNextOpenRowTemp(b, col) {
     for (let r = ROWS - 1; r >= 0; r--) if (b[r][col] === EMPTY) return r;
     return -1;
 }
-
-/* --- AI VS AI CONTROLS REMOVED --- */
 
 /* --- AUDIO ENGINE --- */
 let audioCtx = null;
@@ -416,7 +388,6 @@ function playSfx(type) {
     const now = audioCtx.currentTime;
 
     if (type === 'drop') {
-        // Wood block thud
         osc.type = 'sine';
         osc.frequency.setValueAtTime(400, now);
         osc.frequency.exponentialRampToValueAtTime(50, now + 0.15);
@@ -425,7 +396,6 @@ function playSfx(type) {
         osc.start(now);
         osc.stop(now + 0.15);
     } else if (type === 'win') {
-        // Victory chord
         const playNote = (f, d) => {
             const o = audioCtx.createOscillator();
             const g = audioCtx.createGain();
@@ -439,10 +409,10 @@ function playSfx(type) {
             o.start(now + d);
             o.stop(now + d + 0.4);
         };
-        playNote(523.25, 0); // C5
-        playNote(659.25, 0.1); // E5
-        playNote(783.99, 0.2); // G5
-        playNote(1046.50, 0.4); // C6
+        playNote(523.25, 0);
+        playNote(659.25, 0.1);
+        playNote(783.99, 0.2);
+        playNote(1046.50, 0.4);
     }
 }
 
@@ -473,7 +443,7 @@ function updateConfetti() {
 
     for (let i = particles.length - 1; i >= 0; i--) {
         let p = particles[i];
-        p.x += p.vx; p.y += p.vy; p.vy += 0.3; // gravity
+        p.x += p.vx; p.y += p.vy; p.vy += 0.3;
         p.life--; p.size *= 0.96;
 
         ctx.fillStyle = p.color;
@@ -497,7 +467,7 @@ function clearGhosts() {
     document.querySelectorAll('.ghost-p1, .ghost-p2').forEach(e => e.classList.remove('ghost-p1', 'ghost-p2'));
 }
 function setStatus() {
-    if (!gameActive) return; // Don't overwrite "You Win/Lose" messages
+    if (!gameActive) return;
 
     if (config.mode === 'PvAI') {
         if (currentPlayer === P1) {
@@ -508,34 +478,40 @@ function setStatus() {
             els.status.style.color = 'var(--p2-color)';
         }
     } else {
-        // Online
         const name = (currentPlayer === P1) ? 'Player 1' : 'Player 2';
         els.status.textContent = `${name} Turn`;
         els.status.style.color = currentPlayer === P1 ? 'var(--p1-color)' : 'var(--p2-color)';
     }
 }
-function updateScores() {
-    // Removed
-}
+
 function showModal(winner, draw) {
     if (draw) {
         els.mTitle.textContent = "Draw!";
         els.mTitle.style.color = '#666';
         els.mMsg.textContent = "The board is full.";
     } else {
-        els.mTitle.textContent = winner === P1 ? (config.mode === 'PvAI' ? "You Win!" : "Red Wins!") : (config.mode === 'PvAI' ? "AI Wins!" : "Yellow Wins!");
-        els.mTitle.style.color = winner === P1 ? 'var(--p1-color)' : 'var(--p2-color)';
-        els.mMsg.textContent = "Congratulations!";
+        if (config.mode === 'PvAI') {
+            els.mTitle.textContent = winner === P1 ? "You Win!" : "AI Wins!";
+            els.mTitle.style.color = winner === P1 ? 'var(--p1-color)' : 'var(--p2-color)';
+            els.mMsg.textContent = winner === P1 ? "Congratulations!" : "Better luck next time.";
+        } else {
+            // Online PvP
+            if (winner === myOnlineRole) {
+                els.mTitle.textContent = "You Win!";
+                els.mTitle.style.color = 'var(--accent)';
+                els.mMsg.textContent = "Congratulations!";
+            } else {
+                els.mTitle.textContent = "You Lose!";
+                els.mTitle.style.color = '#666';
+                els.mMsg.textContent = "Your opponent won this round.";
+            }
+        }
     }
     setTimeout(() => els.modal.classList.add('active'), 600);
 }
+
 function closeModal() {
-    // Return to Main Menu
-    els.modal.classList.remove('active');
-    config.mode = 'PvAI';
-    els.mode.value = 'PvAI';
-    updateUIForMode();
-    fullReset();
+    showMainMenu();
 }
 
 // Boot
@@ -571,6 +547,14 @@ socket.on('game_start', (data) => {
 
     // Close menus
     els.omOverlay.classList.remove('active');
+    els.mainMenu.style.display = 'none';
+    els.gameWrapper.style.display = 'block';
+    els.controls.style.display = 'flex';
+    els.statusBar.style.display = 'block';
+
+    // Hide AI settings in online
+    els.diff.disabled = true;
+    els.aiSettings.style.display = 'none';
 
     fullReset();
     gameActive = true;
@@ -578,10 +562,6 @@ socket.on('game_start', (data) => {
     const roleName = myOnlineRole === P1 ? "Player 1 (Red)" : "Player 2 (Yellow)";
     els.status.textContent = `Game Started! You are ${roleName}`;
 
-    // If I am P2, I wait. P1 starts.
-    // fullReset sets currentPlayer = P1.
-    // If I am P2, I wait. P1 starts.
-    // fullReset sets currentPlayer = P1.
     if (myOnlineRole === P2) {
         els.status.textContent += ". Waiting for Opponent...";
     } else {
@@ -590,11 +570,16 @@ socket.on('game_start', (data) => {
 });
 
 socket.on('opponent_move', (data) => {
-    if (!gameActive) return;
+    // Even if gameActive is false (e.g. just finished), we might need to process the final move?
+    // But usually if gameActive is false, it means game over.
+    // However, if I am the loser, the winner made the move that ended the game.
+    // So I need to process it.
+
     // data: { col, player }
     const row = executeMove(data.col, data.player);
-    if (row === -1) return; // Should not happen if synced
+    if (row === -1) return;
 
+    // Check if this move ended the game
     if (checkGameEnd(row, data.col, data.player)) return;
 
     currentPlayer = currentPlayer === P1 ? P2 : P1;
@@ -605,10 +590,8 @@ socket.on('game_won_by_quit', () => {
     gameActive = false;
     els.status.textContent = "Opponent Quit! You Win!";
     els.status.style.color = 'var(--accent)';
-    showModal(myOnlineRole, false); // Show win modal
+    showModal(myOnlineRole, false);
 });
-
-// Removed restart_game listener as restart is gone
 
 /* --- ONLINE MENU FUNCTIONS --- */
 function showOnlineMenu() {
@@ -619,21 +602,21 @@ function showOnlineMenu() {
 
 function closeOnlineMenu() {
     els.omOverlay.classList.remove('active');
-    // Revert to PvAI if cancelled
-    config.mode = 'PvAI';
-    els.mode.value = 'PvAI';
-    updateUIForMode();
-    fullReset();
+    showMainMenu();
 }
 
 function joinRandom() {
     els.omOverlay.classList.remove('active');
     socket.emit('find_match');
+    els.mainMenu.style.display = 'none';
+    els.gameWrapper.style.display = 'block';
+    els.controls.style.display = 'flex';
+    els.statusBar.style.display = 'block';
     els.status.textContent = "Searching for random opponent...";
 }
 
 function createPrivate() {
-    const pref = parseInt(els.onlineTurnPref.value); // 1 or 2
+    const pref = parseInt(els.onlineTurnPref.value);
     socket.emit('create_private', { role_pref: pref });
 }
 
@@ -642,3 +625,4 @@ function joinPrivate() {
     if (code.length !== 4) { alert("Please enter a 4-digit code"); return; }
     socket.emit('join_private', { code: code });
 }
+

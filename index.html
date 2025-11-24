@@ -12,16 +12,17 @@
 
     <canvas id="confetti-canvas"></canvas>
 
-    <header>
+
+
+    <div id="main-menu" class="menu-screen">
         <h1>Connect 4 Elite</h1>
-    </header>
+        <div class="menu-buttons">
+            <button class="btn-primary btn-large" onclick="startPvAI()">👤 vs 🤖 Play AI</button>
+            <button class="btn-accent btn-large" onclick="startOnline()">🌍 Online PvP</button>
+        </div>
+    </div>
 
-    <div class="controls">
-        <select id="game-mode">
-            <option value="PvAI">👤 vs 🤖 (Standard)</option>
-            <option value="OnlinePvP">🌍 Online PvP</option>
-        </select>
-
+    <div class="controls" style="display: none;">
         <div id="ai-settings" style="display:inline-flex; gap:5px;">
             <select id="difficulty" title="Difficulty">
                 <option value="4">Easy</option>
@@ -36,16 +37,16 @@
         </div>
 
         <button class="btn-icon" onclick="toggleSound()" id="snd-btn" title="Sound">🔊</button>
-        <button class="btn-danger" onclick="quitGame()">Quit</button>
+        <button class="btn-danger" onclick="showMainMenu()">Main Menu</button>
     </div>
 
     <!-- AI Controls Removed -->
 
-    <div class="game-wrapper">
+    <div class="game-wrapper" style="display: none;">
         <div class="board" id="board"></div>
     </div>
 
-    <div id="status-bar">Welcome to Connect 4 Elite</div>
+    <div id="status-bar" style="display: none;">Welcome to Connect 4 Elite</div>
 
     <div id="modal-overlay">
         <div class="modal">
