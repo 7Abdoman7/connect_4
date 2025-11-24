@@ -16,22 +16,26 @@ let config = { mode: 'PvAI', depth: 6, sound: true };
 const els = {
     board: document.getElementById('board'),
     status: document.getElementById('status-bar'),
-    diff: document.getElementById('difficulty'),
     sndBtn: document.getElementById('snd-btn'),
-    aiSettings: document.getElementById('ai-settings'),
-    turnOrder: document.getElementById('turn-order'),
-    onlineTurnPref: document.getElementById('online-turn-pref'),
     modal: document.getElementById('modal-overlay'),
     mTitle: document.getElementById('modal-title'),
     mMsg: document.getElementById('modal-msg'),
-    // Online Menu
-    omOverlay: document.getElementById('online-menu'),
-    omMain: document.getElementById('om-main'),
-    omWaiting: document.getElementById('om-waiting'),
+
+    // Menus
+    mainMenu: document.getElementById('main-menu'),
+    aiSetup: document.getElementById('ai-setup-menu'),
+    onlineMode: document.getElementById('online-mode-menu'),
+    onlineFriend: document.getElementById('online-friend-menu'),
+    onlineWaiting: document.getElementById('online-waiting-menu'),
+
+    // Inputs
+    setupDiff: document.getElementById('setup-difficulty'),
+    setupTurn: document.getElementById('setup-turn-order'),
+    onlineTurnPref: document.getElementById('online-turn-pref'),
     omCodeInput: document.getElementById('room-code-input'),
     omCodeDisplay: document.getElementById('room-code-display'),
-    // Main Menu & Game Wrapper
-    mainMenu: document.getElementById('main-menu'),
+
+    // Game Wrapper
     gameWrapper: document.querySelector('.game-wrapper'),
     controls: document.querySelector('.controls'),
     statusBar: document.getElementById('status-bar')
@@ -44,14 +48,20 @@ function init() {
     showMainMenu();
 }
 
-function showMainMenu() {
-    gameActive = false;
-    els.mainMenu.style.display = 'flex';
+/* --- NAVIGATION --- */
+function hideAllMenus() {
+    const menus = [els.mainMenu, els.aiSetup, els.onlineMode, els.onlineFriend, els.onlineWaiting];
+    menus.forEach(m => m.style.display = 'none');
     els.gameWrapper.style.display = 'none';
     els.controls.style.display = 'none';
     els.statusBar.style.display = 'none';
-    els.omOverlay.classList.remove('active');
     els.modal.classList.remove('active');
+}
+
+function showMainMenu() {
+    gameActive = false;
+    hideAllMenus();
+    els.mainMenu.style.display = 'flex';
 
     // Disconnect socket if connected to a game? 
     // Ideally we leave the room.
@@ -61,21 +71,36 @@ function showMainMenu() {
 }
 
 function startPvAI() {
+    hideAllMenus();
+    els.aiSetup.style.display = 'flex';
+}
+
+function confirmAiSetup() {
     config.mode = 'PvAI';
-    els.mainMenu.style.display = 'none';
+    config.depth = parseInt(els.setupDiff.value);
+    const turn = parseInt(els.setupTurn.value);
+
+    hideAllMenus();
     els.gameWrapper.style.display = 'block';
     els.controls.style.display = 'flex';
     els.statusBar.style.display = 'block';
 
-    els.diff.disabled = false;
-    els.aiSettings.style.display = 'inline-flex';
-
-    fullReset();
+    fullReset(turn);
 }
 
 function startOnline() {
     config.mode = 'OnlinePvP';
-    showOnlineMenu();
+    showOnlineModeSelect();
+}
+
+function showOnlineModeSelect() {
+    hideAllMenus();
+    els.onlineMode.style.display = 'flex';
+}
+
+function showFriendMenu() {
+    hideAllMenus();
+    els.onlineFriend.style.display = 'flex';
 }
 
 function createGrid() {
@@ -102,14 +127,14 @@ function createGrid() {
     }
 }
 
-function fullReset() {
+function fullReset(turnOverride) {
     gameActive = true;
     board = Array(ROWS).fill().map(() => Array(COLS).fill(EMPTY));
     moveHistory = [];
 
     // Determine starting player based on mode and settings
     if (config.mode === 'PvAI') {
-        const pref = parseInt(els.turnOrder.value);
+        const pref = turnOverride !== undefined ? turnOverride : 1;
         currentPlayer = (pref === 2) ? P2 : P1;
     } else {
         // Online - Default P1, but online overrides this on game_start
@@ -532,8 +557,8 @@ socket.on('waiting_for_opponent', () => {
 });
 
 socket.on('private_created', (data) => {
-    els.omMain.style.display = 'none';
-    els.omWaiting.style.display = 'flex';
+    hideAllMenus();
+    els.onlineWaiting.style.display = 'flex';
     els.omCodeDisplay.textContent = data.code;
 });
 
@@ -545,16 +570,10 @@ socket.on('game_start', (data) => {
     myOnlineRole = data.role; // 1 or 2
     onlineRoom = data.room;
 
-    // Close menus
-    els.omOverlay.classList.remove('active');
-    els.mainMenu.style.display = 'none';
+    hideAllMenus();
     els.gameWrapper.style.display = 'block';
     els.controls.style.display = 'flex';
     els.statusBar.style.display = 'block';
-
-    // Hide AI settings in online
-    els.diff.disabled = true;
-    els.aiSettings.style.display = 'none';
 
     fullReset();
     gameActive = true;
@@ -594,24 +613,12 @@ socket.on('game_won_by_quit', () => {
 });
 
 /* --- ONLINE MENU FUNCTIONS --- */
-function showOnlineMenu() {
-    els.omOverlay.classList.add('active');
-    els.omMain.style.display = 'flex';
-    els.omWaiting.style.display = 'none';
-}
-
-function closeOnlineMenu() {
-    els.omOverlay.classList.remove('active');
-    showMainMenu();
-}
-
 function joinRandom() {
-    els.omOverlay.classList.remove('active');
-    socket.emit('find_match');
-    els.mainMenu.style.display = 'none';
+    hideAllMenus();
     els.gameWrapper.style.display = 'block';
     els.controls.style.display = 'flex';
     els.statusBar.style.display = 'block';
+    socket.emit('find_match');
     els.status.textContent = "Searching for random opponent...";
 }
 
@@ -625,4 +632,3 @@ function joinPrivate() {
     if (code.length !== 4) { alert("Please enter a 4-digit code"); return; }
     socket.emit('join_private', { code: code });
 }
-
