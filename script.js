@@ -212,6 +212,11 @@ function handleInteract(col) {
         const row = executeMove(col, currentPlayer);
         if (row === -1) return;
 
+        // Emit Online Move
+        if (config.mode === 'OnlinePvP') {
+            socket.emit('make_move', { room: onlineRoom, col: col, player: myOnlineRole });
+        }
+
         if (checkGameEnd(row, col, currentPlayer)) return;
 
         // Next Turn
@@ -223,11 +228,6 @@ function handleInteract(col) {
         if (config.mode === 'PvAI' && gameActive) {
             els.status.textContent = "🤖 CPU Thinking...";
             setTimeout(processAiTurn, 100); // Slight delay for rendering
-        }
-
-        // Emit Online Move
-        if (config.mode === 'OnlinePvP' && gameActive) {
-            socket.emit('make_move', { room: onlineRoom, col: col, player: myOnlineRole });
         }
     }
 }
